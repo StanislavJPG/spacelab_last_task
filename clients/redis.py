@@ -1,34 +1,36 @@
-import asyncio
 import logging
 import random
-import time
-from threading import Thread
 
-from clients.interfaces import AbstractAPIClient
+from clients.interfaces import APIClient
 import asyncio_redis
 
 """
 I'm using asyncio_redis because of some errors of default redis package 
 """
 
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 
-class BinanceRedisClient(AbstractAPIClient):
+
+async def init_async_redis() -> asyncio_redis:
+    # create connection to the redis
+    connection = await asyncio_redis.Connection.create(host='localhost', port=6379)
+    return connection
+
+
+class BinanceRedisClient(APIClient):
     def __init__(self, currency: str, period: int) -> None:
-        self.currency = currency
-        self.period = period
+        super().__init__(currency, period)
 
-    async def _save_to_db(self, i: int = None):
-        for i in range(self.period):
-            row = await self.get_binance_exchange(currency=self.currency)
-            connection = await asyncio_redis.Connection.create(host='localhost', port=6379)
-            await connection.set(f'ExchangeRate[{i}]', f'mins:{row["mins"]} price:{row["price"]} '
-                                                       f'close_time:{row["closeTime"]}', 120)
-
-    def start(self) -> None:
+    async def _save_to_db(self):
         try:
-            t1 = Thread(target=asyncio.run, args=(self._save_to_db(),))
-            t1.start()
-        finally:
-            logging.basicConfig(level=logging.INFO, format='%(message)s')
-            logging.info(random.randrange(10))
-            time.sleep(1.5)
+            for period in range(self.period):
+                data = await super()._get_binance_exchange()
+                connection = await init_async_redis()
+                await connection.set(f'ExchangeRate[{period}]', f'mins:{data["mins"]} price:{data["price"]} '
+                                                                f'close_time:{data["closeTime"]}', 120)
+                logging.info(random.randrange(10))
+        except KeyError:
+            logging.error(f'Is the currency {self.currency} valid?')
+
+    def start(self):
+        return super().start()

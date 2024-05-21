@@ -1,28 +1,32 @@
 import asyncio
+import time
 from abc import ABC, abstractmethod
+from threading import Thread
 
 import httpx
-from tortoise import Tortoise
 from yarl import URL
 
 
-class AbstractAPIClient(ABC):
-    @abstractmethod
-    def __init__(self) -> None:
-        ...
+class APIClient(ABC):
+    def __init__(self, currency: str, period: int) -> None:
+        self.currency = currency
+        self.period = period
 
     @abstractmethod
-    def _save_to_db(self, i=None):
+    def _save_to_db(self):
+        # logic of saving data to the NoSQL, SQL databases
         ...
 
-    @abstractmethod
-    def start(self) -> None:
-        ...
+    def start(self):
+        # creation threads method
+        t1 = Thread(target=asyncio.run, args=(self._save_to_db(),))
+        t1.start()
+        time.sleep(1.5)
+        return t1
 
-    @staticmethod
-    async def get_binance_exchange(currency):
+    async def _get_binance_exchange(self):
+        # main method of getting binance exchanges from API
         async with httpx.AsyncClient() as client:
-            url = URL('https://api.binance.com/api/v3/avgPrice').with_query(symbol=currency)
+            url = URL('https://api.binance.com/api/v3/avgPrice').with_query(symbol=self.currency)
             response = await client.get(str(url))
-            row = response.json()
-        return row
+        return response.json()
